@@ -32,18 +32,30 @@ class AgentState(TypedDict):
 
 # function to research data
 def research_data_node(state: AgentState):
-    """Function untuk research data"""
-    # ambil message terakhir
+    """Function untuk research data dengan query pintar"""
     messages = state["messages"]
     last_message = messages[-1].content
-    print(f"Last message: {last_message}")
+    print(f"🕵️ [Research] Input User: {last_message}")
 
-    # search data dari pesan
-    search_result = search.run(last_message)
+    # LOGIC PINTAR: Deteksi apakah ini perbandingan?
+    # Jika ada kata 'vs', 'lawan', 'banding', atau 'kompetitor'
+    keywords_banding = ["vs", "lawan", "banding", "kompetitor", "beda"]
+    
+    if any(k in last_message.lower() for k in keywords_banding):
+        # Tambahkan keyword sakti untuk perbandingan
+        query = f"{last_message} comparison market share features pros cons 2025 vs"
+        print(f"🔎 Mode: COMPARISON SEARCH -> {query}")
+    else:
+        # Search biasa
+        query = f"{last_message} market analysis trends statistics 2025"
+        print(f"🔎 Mode: GENERAL SEARCH -> {query}")
 
-    # simpan data ke state
+    try:
+        search_result = search.run(query)
+    except Exception as e:
+        search_result = f"Error searching: {e}"
+
     state["research_data"] = search_result
-
     return state
 
 # function strategic data
@@ -58,14 +70,18 @@ def strategic_data_node(state: AgentState):
 
     system_prompt = """
     Peran: Senior Product Strategist.
-    Tugas: Analisis data riset berikut.
+    Tugas: Analisis data riset dan terbaru 2025 berikut.
     
     DATA RISET:
     {context}
+
+    INSTRUKSI LOGIKA:
+    - Jika data berisi DUA kompetitor (misal A vs B), bagian "Insight Analisa Data" WAJIB membandingkan keduanya secara Head-to-Head (Market Share, Harga, atau Fitur).
+    - Jika data hanya SATU produk, fokus pada produk tersebut.
     
     Instruksi Output (WAJIB Ikuti Format Ini):
     
-    📈 **Tren dan Insight Pasar:**
+    📈 **Insight Analisa Data:**
     - [Insight 1]
     - [Insight 2]
 
