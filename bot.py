@@ -8,6 +8,7 @@ from langchain_core.messages import HumanMessage
 # import agent & pdf export
 from agent import product_agent_graph
 from pdf_utils import create_pdf_report
+from file_loader import parse_document
 
 # Load environment variables from .env file
 load_dotenv()
@@ -61,6 +62,51 @@ async def export_pdf_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         logging.error(f"PDF Error: {e}")
         await update.message.reply_text("Gagal membuat PDF. Terjadi kesalahan sistem.")
 
+async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menangani file PDF/Excel yang dikirim user"""
+    chat_id = update.effective_chat.id
+    document = update.message.document
+    
+    await update.message.reply_text(
+        f"📂 Menerima file: *{document.file_name}*\n⏳ Sedang membaca & menganalisis data...",
+        parse_mode='Markdown'
+    )
+    await context.bot.send_chat_action(chat_id=chat_id, action='typing')
+
+    try:
+        file = await context.bot.get_file(document.file_id)
+        file_path = f"temp_{document.file_name}" 
+        await file.download_to_drive(file_path)
+        
+        extracted_text = parse_document(file_path)
+        
+        # Hapus file setelah dibaca agar hemat storage
+        if os.path.exists(file_path):
+            os.remove(file_path)
+            
+        inputs = {
+            "messages": [HumanMessage(content=f"Tolong analisis data dari file {document.file_name} ini.")],
+            "research_data": "", # Kosongkan riset awal, biarkan dia fokus ke file dulu atau searching nanti
+            "file_content": extracted_text
+        }
+        
+        # Invoke Graph
+        results = await product_agent_graph.ainvoke(inputs)
+        response = results["messages"][-1].content
+        
+        user_last_analysis[chat_id] = response
+
+        try:
+            await context.bot.send_message(chat_id=chat_id, text=response, parse_mode='Markdown')
+        except:
+            await context.bot.send_message(chat_id=chat_id, text=response)
+            
+        await context.bot.send_message(chat_id=chat_id, text="💡 Ketik /export untuk simpan ke PDF.")
+
+    except Exception as e:
+        logging.error(f"File Error: {e}")
+        await update.message.reply_text("❌ Gagal membaca file. Pastikan formatnya PDF, Excel, atau CSV.")
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler pesan dengan fitur Safe Send (Anti-Crash)"""
     user_msg = update.message.text
@@ -77,7 +123,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     inputs = {
         "messages": [HumanMessage(content=user_msg)],
-        "research_data": ""
+        "research_data": "",
+        "file_content": ""
     }
 
     try:
@@ -122,6 +169,7 @@ if __name__ == '__main__':
     # Daftarkan Handlers
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("export", export_pdf_command))
+    app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
     
     print("🤖 Bot Product Strategist sedang berjalan... Tekan Ctrl+C untuk berhenti.")

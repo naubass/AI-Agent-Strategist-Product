@@ -29,6 +29,7 @@ tools = [
 class AgentState(TypedDict):
     messages: List[HumanMessage | AIMessage | SystemMessage]
     research_data: str
+    file_content: str
 
 # function to research data
 def research_data_node(state: AgentState):
@@ -64,46 +65,58 @@ def strategic_data_node(state: AgentState):
     # ambil data dari state
     messages = state["messages"]
     research_data = state.get("research_data", "Tidak ada data riset")
+    file_content = state.get("file_content", "Tidak ada konten file")
+
+    print(f"🧠 [Strategist] Data Riset: {len(research_data)} chars")
+    print(f"📂 [Strategist] Data File: {len(file_content)} chars")
 
     # tampilkan state research
     print(f"Data riset: {research_data}")
 
     system_prompt = """
     Peran: Senior Product Strategist.
-    Tugas: Analisis data riset dan terbaru 2025 berikut.
+    Tugas: Analisis data strategis dari Riset Pasar 2025 dan Data User.
     
-    DATA RISET:
-    {context}
-
-    INSTRUKSI LOGIKA:
-    - Jika data berisi DUA kompetitor (misal A vs B), bagian "Insight Analisa Data" WAJIB membandingkan keduanya secara Head-to-Head (Market Share, Harga, atau Fitur).
-    - Jika data hanya SATU produk, fokus pada produk tersebut.
+    SUMBER DATA:
+    1. DATA RISET INTERNET (Eksternal):
+    {research_data}
+    
+    2. DATA FILE USER (Internal - PDF/Excel):
+    {file_data}
+    
+    INSTRUKSI LOGIKA (PENTING):
+    - Jika data berisi DUA kompetitor (misal A vs B), bagian "Insight" WAJIB membandingkan keduanya secara Head-to-Head (Market Share, Harga, atau Fitur).
+    - Jika ada DATA FILE USER, jadikan itu prioritas utama untuk dianalisis, lalu validasi dengan data riset internet.
+    - Jika data hanya SATU produk, fokus pada tren pasarnya.
     
     Instruksi Output (WAJIB Ikuti Format Ini):
     
     📈 **Insight Analisa Data:**
-    - [Insight 1]
-    - [Insight 2]
+    - [Insight 1: Perbandingan Head-to-Head / Temuan Utama dari File]
+    - [Insight 2: Tren Pasar Terkini 2025]
 
     📊 **Analisis SWOT:**
-    - 💪 **Strengths:** [Kekuatan]
-    - ⚠️ **Weaknesses:** [Kelemahan]
-    - 🌟 **Opportunities:** [Peluang]
-    - ⚡ **Threats:** [Ancaman]
+    - 💪 **Strengths:** [Kekuatan Utama]
+    - ⚠️ **Weaknesses:** [Kelemahan / Pain Point User]
+    - 🌟 **Opportunities:** [Peluang Bisnis / Celah Pasar]
+    - ⚡ **Threats:** [Ancaman Kompetitor / Regulasi]
 
     🚀 **Rekomendasi Strategis:**
-    - [Strategi 1]
-    - [Strategi 2]
+    - [Strategi Konkret 1]
+    - [Strategi Konkret 2]
 
-    ATURAN FORMATTING (PENTING UNTUK TELEGRAM):
+    ATURAN FORMATTING (ANTI-ERROR TELEGRAM):
     1. JANGAN gunakan simbol underscore (_) sama sekali. Ganti dengan spasi.
-    2. Gunakan strip (-) untuk bullet points.
-    3. Pastikan setiap tanda bintang ganda (**) selalu ditutup rapat.
-    4. Jawab SINGKAT & PADAT.
+    2. Gunakan strip (-) untuk bullet points. JANGAN pakai bintang (*).
+    3. Pastikan setiap tanda bintang ganda (**) untuk bold selalu ditutup rapat.
+    4. Jawab SINGKAT & PADAT (Maksimal 2 poin per bagian).
     """
 
     system_message = SystemMessage(
-        content=system_prompt.format(context=research_data)
+        content=system_prompt.format(
+            research_data=research_data if research_data else "Tidak ada data riset internet.",
+            file_data=file_content if file_content else "Tidak ada file user diupload."
+        )
     )
 
     # invoke
